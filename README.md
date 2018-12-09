@@ -1,21 +1,15 @@
-# TypeScript Boilerplate
+# P2P Chat
 
-This is a simple setup for getting started building a web application using TypeScript, React, Redux, ImmutableJS, and Glamor.
+Goal: Peer to peer chat messaging using a datalog-like database.
 
-## Getting Started
+- use simple-peer and a signalhub to connect users
+- create a simple datalog database with the various indexes. no query language yet.
+- create crypto keys, save in local storage.
+- sync databases.
 
-```sh
-git clone git@github.com:ccorcos/typescript-boilerplate.git project
-cd project
-git remote remove origin
-npm install
-npm start
-```
+---
 
-An in order to be able to deploy this using Github pages, you'll need to create an push an initial branch to Github:
-
-```sh
-git checkout -b gh-pages
-git push origin gh-pages
-git checkout master
-```
+- wrap in an electron app with leveldb.
+- create a query language with a permissioning model.
+- live query listeners.
+- multiple device sync.
