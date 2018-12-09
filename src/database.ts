@@ -13,15 +13,12 @@ class AttributeSchema<
 	constructor(public name: N, public valueType: V, public cardinality: C) {}
 }
 
-class Entity<Attr extends AttributeSchema<any, any, any>> {
+class Entity<Attrs extends { [key: string]: AttributeSchema<any, any, any> }> {
 	public id: string
-	public attributes: { [key in Attr["name"]]: Attr }
-	constructor(id: string, attributes: Attr[]) {
+	public attributes: Attrs
+	constructor(id: string, attributes: Attrs) {
 		this.id = id
-		this.attributes = {} as any
-		for (const attr of attributes) {
-			this.attributes[attr.name] = attr
-		}
+		this.attributes = attributes
 	}
 }
 
@@ -29,36 +26,39 @@ class Entity<Attr extends AttributeSchema<any, any, any>> {
 // --------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------
 
-class Person extends Entity<
-	typeof PersonNameSchema | typeof PersonGroupSchema
-> {
+class Person extends Entity<{
+	name: typeof PersonNameSchema
+	group: typeof PersonGroupSchema
+}> {
 	constructor(id?: string) {
-		super(id || Math.round(Math.random() * 10e10).toString(), [
-			PersonNameSchema,
-			PersonGroupSchema,
-		])
+		super(id || Math.round(Math.random() * 10e10).toString(), {
+			name: PersonNameSchema,
+			group: PersonGroupSchema,
+		})
 	}
 }
 
-class Group extends Entity<typeof GroupNameSchema> {
+class Group extends Entity<{ name: typeof GroupNameSchema }> {
 	constructor(id?: string) {
-		super(id || Math.round(Math.random() * 10e10).toString(), [GroupNameSchema])
+		super(id || Math.round(Math.random() * 10e10).toString(), {
+			name: GroupNameSchema,
+		})
 	}
 }
 
-class Message extends Entity<
-	| typeof MessageAuthorSchema
-	| typeof MessageGroupSchema
-	| typeof MessageTextSchema
-	| typeof MessageCreatedAtSchema
-> {
+class Message extends Entity<{
+	author: typeof MessageAuthorSchema
+	group: typeof MessageGroupSchema
+	text: typeof MessageTextSchema
+	createdAt: typeof MessageCreatedAtSchema
+}> {
 	constructor(id?: string) {
-		super(id || Math.round(Math.random() * 10e10).toString(), [
-			MessageAuthorSchema,
-			MessageGroupSchema,
-			MessageTextSchema,
-			MessageCreatedAtSchema,
-		])
+		super(id || Math.round(Math.random() * 10e10).toString(), {
+			author: MessageAuthorSchema,
+			group: MessageGroupSchema,
+			text: MessageTextSchema,
+			createdAt: MessageCreatedAtSchema,
+		})
 	}
 }
 
@@ -94,15 +94,17 @@ type ValueTypeType<V extends ValueType> = V extends "number"
 	? V
 	: never
 
-class Fact<E extends Entity<any>, A extends keyof E["attributes"]> {
+class Fact<E extends Entity<any>, K extends keyof E["attributes"]> {
 	constructor(
 		public entity: E,
-		public attribute: A,
-		public value: E["attributes"][A]["valueType"] extends "string" ? 0 : 1
+		public attribute: E["attributes"][K]["name"],
+		public value: E["attributes"][K]["valueType"] extends "string" ? 0 : 1
 	) {}
 }
 
-type t = Person["attributes"]["person/name"]["valueType"]
+type t = Person["attributes"]["name"]["valueType"]
+
+type y = t extends "string" ? 0 : 1
 
 const chet = new Person()
 
