@@ -97,19 +97,14 @@ type ValueTypeType<V extends ValueType> = V extends "number"
 class Fact<E extends Entity<any>, K extends keyof E["attributes"]> {
 	constructor(
 		public entity: E,
-		public attribute: E["attributes"][K]["name"],
-		public value: E["attributes"][K]["valueType"] extends "string" ? 0 : 1
+		public attribute: K,
+		public value: ValueTypeType<E["attributes"][K]["valueType"]>
 	) {}
 }
 
-type t = Person["attributes"]["name"]["valueType"]
-
-type y = t extends "string" ? 0 : 1
-
 const chet = new Person()
 
-new Fact(chet, "person/name", 0)
-new Fact(chet, "person/name", 1)
+new Fact(chet, "name", "Chester")
 
 // type Fact =
 // 	// entityId, attribute, value, transaction, append/remove
