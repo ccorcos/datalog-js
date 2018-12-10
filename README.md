@@ -9,6 +9,14 @@ Goal: Peer to peer chat messaging using a datalog-like database.
 
 ---
 
+- schema validation before commiting to the db
+- schema updating
+- verify every transaction has been received.
+
+- database as of transaction is an interesting pattern.
+
+---
+
 - wrap in an electron app with leveldb.
 - create a query language with a permissioning model.
 - live query listeners.
@@ -17,3 +25,5 @@ Goal: Peer to peer chat messaging using a datalog-like database.
 ## Notes
 
 - TypeScript classes offer more type power than plain object. But don't be confused, this code is not "object-oriented". In fact, its very functional.
+
+- Database is a Datalog flavor, very much inspired by Datomic and [level-fact-base](https://github.com/smallhelm/level-fact-base).

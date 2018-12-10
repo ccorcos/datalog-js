@@ -14,6 +14,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"charwise": "^3.0.1",
+		"cuid": "^2.1.4",
 		"glamor": "^2.20.40",
 		"levelup": "^3.1.1",
 		"localstorage-down": "^0.6.7",
