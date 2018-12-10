@@ -13,3 +13,7 @@ Goal: Peer to peer chat messaging using a datalog-like database.
 - create a query language with a permissioning model.
 - live query listeners.
 - multiple device sync.
+
+## Notes
+
+- TypeScript classes offer more type power than plain object. But don't be confused, this code is not "object-oriented". In fact, its very functional.
