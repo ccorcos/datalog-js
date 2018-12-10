@@ -16,14 +16,12 @@
 		"charwise": "^3.0.1",
 		"cuid": "^2.1.4",
 		"glamor": "^2.20.40",
-		"levelup": "^3.1.1",
-		"localstorage-down": "^0.6.7",
+		"level-mem": "^3.0.1",
 		"lodash": "^4.17.11",
 		"react": "^16.7.0-alpha.0",
 		"react-dom": "^16.7.0-alpha.0"
 	},
 	"devDependencies": {
-		"@types/levelup": "^3.1.0",
 		"@types/lodash": "^4.14.118",
 		"@types/react": "^16.7.13",
 		"@types/react-dom": "^16.0.11",

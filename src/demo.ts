@@ -57,3 +57,5 @@ async function main() {
 	})
 	console.log("result", result)
 }
+
+window["demo"] = main

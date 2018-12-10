@@ -1,4 +1,5 @@
 import * as React from "react"
+import "../demo"
 
 export function App() {
 	const [{ x, y }, setMouse] = React.useState({ x: 0, y: 0 })

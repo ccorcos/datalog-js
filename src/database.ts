@@ -1,8 +1,7 @@
-import * as storage from "localstorage-down"
-import levelup from "levelup"
 import * as randomId from "cuid"
+import * as level from "level-mem"
 
-const db = levelup(storage)
+const db = level()
 
 function range(prefix: Array<any>, onData: (data: any) => void): Promise<void> {
 	const gte = prefix
