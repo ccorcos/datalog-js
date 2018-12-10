@@ -4,6 +4,25 @@ import * as randomId from "cuid"
 
 const db = levelup(storage)
 
+function range(prefix: Array<any>, onData: (data: any) => void): Promise<void> {
+	const gte = prefix
+	const lte = prefix.concat([void 0])
+
+	const stream = db.createReadStream({ gte: gte, lte: lte })
+
+	let resolve, reject
+	const promise = new Promise<void>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+
+	stream.on("error", reject)
+	stream.on("end", resolve)
+	stream.on("data", onData)
+
+	return promise
+}
+
 type Constructor<T> = { new (): T }
 
 type ValueType = "number" | "string" | Constructor<Entity<any>>
@@ -95,6 +114,8 @@ type BatchOp =
 	| { type: "del"; key: Array<string> }
 	| { type: "put"; key: Array<string>; value: any }
 
+const indexes = ["eavto", "aevto", "aveto", "vaeto"]
+
 export async function commit(facts: Array<GenericFact>) {
 	// https://docs.datomic.com/on-prem/indexes.html
 	// EAVT, get all attribute-values on an entity.
@@ -110,7 +131,6 @@ export async function commit(facts: Array<GenericFact>) {
 	]
 
 	// Write to each index.
-	const indexes = ["eavto", "aevto", "aveto", "vaeto"]
 	const batchOps: Array<BatchOp> = []
 
 	for (const fact of commitFacts) {
@@ -134,34 +154,8 @@ export async function commit(facts: Array<GenericFact>) {
 	await db.batch(batchOps)
 }
 
-/*
-// Get list of conversations
-query([
-	[chet, "group/name", UnknownGroup]
-])
-
-// Get messages in a conversation
-query([
-	[UnkownMessage, "message/group", group]
-])
-
-// Get group members
-query([
-	[UnkownPerson, "person/group", group]
-])
-
-// As of a transaction?
-// Limit and offset?
-// Sort by?
-
-// Get all (unread?) messages from all conversations
-query([
-	[chet, "person/group", UnknownGroup],
-	[UnkownMessage, "message/group", UnknownGroup],
-])
-*/
-
-class Var<T extends ValueType> {
+export class Var<T extends ValueType> {
+	public value: ValueTypeType<T> | undefined
 	constructor(public valueType: T) {}
 }
 
@@ -175,13 +169,105 @@ type Statement<E extends Entity<any>, A extends keyof E["attributes"]> =
 	// Look up either side.
 	| [Var<Constructor<E>>, A, Var<E["attributes"]["valueType"]>]
 
+// TODO: better return type.
 export async function query(opts: {
 	find: Array<Var<any>>
 	given: Array<Binding<any>>
 	where: Array<Statement<any, any>>
 }) {
-	// Datomic queries run in order, I think.
-	// Level-Fact-Base has them in arbitrary order.
-	// Lets read a little bit.
-	// for every statement
+	// Datomic appears to run clauses in order.
+	// https://docs.datomic.com/on-prem/best-practices.html#join-along
+	// Level-Fact-Base appears to reorder statements.
+	//
+	// Lets try doing it in order first.
+
+	const bindings = new Map<Var<any>, ValueTypeType<any>>()
+	for (const [a, b] of opts.given) {
+		bindings.set(a, b)
+	}
+
+	for (const statement of opts.where) {
+		// Resolve the bindings.
+		const boundStatement = statement.map(item => {
+			const value = bindings.get(item)
+			if (value) {
+				return value
+			} else {
+				return item
+			}
+		})
+
+		// Lookup the index we want.
+		const [e, a, v] = boundStatement
+
+		const queryType = [
+			e instanceof Var ? "_" : "e",
+			a instanceof Var ? "_" : "a",
+			v instanceof Var ? "_" : "v",
+		].join("")
+
+		if (queryType === "eav") {
+			continue
+		}
+
+		const indexLookup = {
+			___: "eavto",
+
+			e__: "eavto",
+			ea_: "eavto",
+
+			e_v: undefined, // when would this happen?
+
+			_a_: "aveto",
+			_av: "aveto",
+
+			__v: "vaeto",
+		}
+
+		const index: string | undefined = indexLookup[queryType]
+		if (!index) {
+			throw new Error("How did we get here?")
+		}
+
+		// Run query
+		const keyPrefix = [index]
+		for (const item of boundStatement) {
+			if (item instanceof Var) {
+				break
+			} else if (item instanceof Entity) {
+				keyPrefix.push(item.id)
+			} else {
+				keyPrefix.push(item)
+			}
+		}
+
+		const es = new Set<string>()
+		const as = new Set<string>()
+		const vs = new Set<any>()
+		await range(keyPrefix, data => {
+			const [e, a, v, t, o] = "eavto"
+				.split("")
+				.map(x => data.key[index.indexOf(x) + 1])
+
+			// TODO: transactions should be an autoincrementing number
+			// TODO: query against transaction range
+			// TODO: return a list of results
+
+			es.add(e)
+			as.add(a)
+			vs.add(v)
+		})
+
+		if (e instanceof Var) {
+			bindings.set(e, new e.valueType(Array.from(es)[0]))
+		}
+		if (a instanceof Var) {
+			bindings.set(a, Array.from(as)[0])
+		}
+		if (v instanceof Var) {
+			bindings.set(v, Array.from(vs)[0])
+		}
+	}
+
+	return opts.find.map(item => bindings.get(item))
 }
