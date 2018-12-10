@@ -4,7 +4,9 @@ import * as randomId from "cuid"
 
 const db = levelup(storage)
 
-type ValueType = "number" | "string" | { new (): Entity<any> }
+type Constructor<T> = { new (): T }
+
+type ValueType = "number" | "string" | Constructor<Entity<any>>
 type Cardinality = "one" | "many"
 
 export class AttributeSchema<
@@ -53,7 +55,7 @@ type ValueTypeType<V extends ValueType> = V extends "number"
 	? number
 	: V extends "string"
 	? string
-	: V extends { new (): Entity<any> }
+	: V extends Constructor<Entity<any>>
 	? InstanceType<V>
 	: undefined
 
@@ -130,4 +132,56 @@ export async function commit(facts: Array<GenericFact>) {
 	}
 
 	await db.batch(batchOps)
+}
+
+/*
+// Get list of conversations
+query([
+	[chet, "group/name", UnknownGroup]
+])
+
+// Get messages in a conversation
+query([
+	[UnkownMessage, "message/group", group]
+])
+
+// Get group members
+query([
+	[UnkownPerson, "person/group", group]
+])
+
+// As of a transaction?
+// Limit and offset?
+// Sort by?
+
+// Get all (unread?) messages from all conversations
+query([
+	[chet, "person/group", UnknownGroup],
+	[UnkownMessage, "message/group", UnknownGroup],
+])
+*/
+
+class Var<T extends ValueType> {
+	constructor(public valueType: T) {}
+}
+
+type Binding<T extends ValueType> = [Var<T>, ValueTypeType<T>]
+
+type Statement<E extends Entity<any>, A extends keyof E["attributes"]> =
+	// Look up a value given an entity
+	| [E, A, Var<E["attributes"]["valueType"]>]
+	// Lookup an entity given a value
+	| [Var<Constructor<E>>, A, E["attributes"]["valueType"]]
+	// Look up either side.
+	| [Var<Constructor<E>>, A, Var<E["attributes"]["valueType"]>]
+
+export async function query(opts: {
+	find: Array<Var<any>>
+	given: Array<Binding<any>>
+	where: Array<Statement<any, any>>
+}) {
+	// Datomic queries run in order, I think.
+	// Level-Fact-Base has them in arbitrary order.
+	// Lets read a little bit.
+	// for every statement
 }
