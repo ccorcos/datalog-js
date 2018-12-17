@@ -7,7 +7,18 @@
 		"start": "webpack-dev-server --content-base dist",
 		"build": "rm -rf dist && webpack -p",
 		"deploy": "git add -f dist && git commit -m 'deploy' && git push origin `git subtree split --prefix dist master`:gh-pages --force && git rm -r dist && git commit -m 'cleanup deploy'",
-		"release": "npm run build && npm run deploy"
+		"release": "npm run build && npm run deploy",
+		"test": "ava"
+	},
+	"ava": {
+		"compileEnhancements": false,
+		"extensions": [
+			"ts",
+			"tsx"
+		],
+		"require": [
+			"ts-node/register"
+		]
 	},
 	"keywords": [],
 	"author": "",
@@ -16,16 +27,19 @@
 		"charwise": "^3.0.1",
 		"cuid": "^2.1.4",
 		"glamor": "^2.20.40",
+		"level": "^4.0.0",
 		"level-mem": "^3.0.1",
 		"lodash": "^4.17.11",
 		"react": "^16.7.0-alpha.0",
 		"react-dom": "^16.7.0-alpha.0"
 	},
 	"devDependencies": {
+		"@types/levelup": "^3.1.0",
 		"@types/lodash": "^4.14.118",
 		"@types/react": "^16.7.13",
 		"@types/react-dom": "^16.0.11",
 		"@types/webpack": "^4.4.20",
+		"ava": "^1.0.1",
 		"awesome-typescript-loader": "^5.2.1",
 		"file-loader": "^2.0.0",
 		"html-webpack-plugin": "^3.2.0",

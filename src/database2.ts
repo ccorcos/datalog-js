@@ -2,10 +2,119 @@ import * as randomId from "cuid"
 import * as level from "level"
 import { LevelUp } from "levelup"
 
-// TODO: make this pure!
-export const db: LevelUp = level("./mydb")
+type Cardinality = "one" | "many"
+type ValueType = "number" | "string" | "reference"
+
+interface Attribute<
+	N extends string,
+	V extends ValueType,
+	C extends Cardinality
+> {
+	name: N
+	valueType: V
+	cardinality: C
+	noHistory?: boolean
+	unique?: boolean
+}
+
+function Attribute<
+	N extends string,
+	V extends ValueType,
+	C extends Cardinality
+>(args: Attribute<N, V, C>) {
+	return args
+}
+
+type ValueTypeType<V extends ValueType> = V extends "number"
+	? number
+	: V extends "string"
+	? string
+	: V extends "reference"
+	? string
+	: undefined
+
+type Operation<C extends Cardinality> = C extends "one"
+	? "set"
+	: "add" | "remove"
+
+interface Fact<N extends string, V extends ValueType, C extends Cardinality> {
+	id: string
+	entity: string
+	attribute: N
+	value: V
+	operation: Operation<C>
+}
+
+function Fact<N extends string, V extends ValueType, C extends Cardinality>(
+	entity: string,
+	attribute: N,
+	value: V,
+	operation: Operation<C>
+): Fact<N, V, C> {
+	return {
+		id: randomId(),
+		entity: entity,
+		attribute: attribute,
+		value: value,
+		operation: operation,
+	}
+}
+
+type BatchOp =
+	| { type: "del"; key: Array<string> }
+	| { type: "put"; key: Array<string>; value: any }
+
+const indexes = ["eavto", "aevto", "aveto", "vaeto"]
+
+export async function commit(facts: Array<Fact>) {
+	// https://docs.datomic.com/on-prem/indexes.html
+	// EAVT, get all attribute-values on an entity.
+	// AEVT, get all values of a given attribute.
+	// AVET, find entities with the same name, or enforce uniqueness.
+	// VAET, reverse index for finding relationships.
+
+	// Create a transaction with metadata.
+	const transactionId = randomId()
+	const commitFacts = [
+		Fact(transactionId, "transaction/createdAt", new Date().toString()),
+		...facts,
+	]
+
+	// Write to each index.
+	const batchOps: Array<BatchOp> = []
+
+	for (const fact of commitFacts) {
+		const obj = {
+			e: fact.entity,
+			a: fact.attribute,
+			v: fact.value,
+			t: transactionId,
+			o: fact.operation,
+		}
+
+		for (const index of indexes) {
+			batchOps.push({
+				type: "put",
+				key: [index, ...index.split("").map(key => obj[key])],
+				value: fact.id,
+			})
+		}
+	}
+
+	await db.batch(batchOps)
+}
+
+class Database {
+	constructor(name: string) {}
+}
+
+function createDb(path: string) {
+	const db: LevelUp = level("./mydb")
+	return db
+}
 
 export function range(
+	db: LevelUp,
 	prefix: Array<any>,
 	onData: (data: any) => void
 ): Promise<void> {
@@ -27,135 +136,10 @@ export function range(
 	return promise
 }
 
-type Constructor<T> = { new (): T }
-
-type ValueType = "number" | "string" | Constructor<Entity<any>>
-type Cardinality = "one" | "many"
-
-export class AttributeSchema<
-	N extends string,
-	V extends ValueType,
-	C extends Cardinality
-> {
-	public name: N
-	public valueType: V
-	public cardinality: C
-	public noHistory: boolean
-	public unique: boolean
-
-	constructor(opts: {
-		name: N
-		valueType: V
-		cardinality: C
-		noHistory?: boolean
-		unique?: boolean
-	}) {
-		this.name = opts.name
-		this.valueType = opts.valueType
-		this.cardinality = opts.cardinality
-		this.noHistory = Boolean(opts.noHistory)
-		this.unique = Boolean(opts.unique)
-	}
-}
-
-export class Entity<Attr extends AttributeSchema<any, any, any>> {
-	public id: string
-	public attributes: {
-		[key in Attr["name"]]: Attr extends AttributeSchema<key, any, any>
-			? Attr
-			: never
-	}
-	constructor(opts: { id?: string; attributes: Attr[] }) {
-		this.id = opts.id || randomId()
-		this.attributes = {} as any
-		for (const attr of opts.attributes) {
-			this.attributes[attr.name] = attr
-		}
-	}
-}
-
-type ValueTypeType<V extends ValueType> = V extends "number"
-	? number
-	: V extends "string"
-	? string
-	: V extends Constructor<Entity<any>>
-	? InstanceType<V>
-	: undefined
-
-export class Fact<E extends Entity<any>, A extends keyof E["attributes"]> {
-	public id = randomId()
-	public operation: "set" | "add" | "remove"
-	constructor(
-		public entity: E,
-		public attribute: A,
-		public value: ValueTypeType<E["attributes"][A]["valueType"]>,
-		// Allow removing for cardinality "many"
-		remove: boolean = false
-	) {
-		if (entity.attributes[attribute].cardinality === "many") {
-			this.operation = remove ? "remove" : "add"
-		} else {
-			this.operation = "set"
-		}
-	}
-}
-
-export class Transaction extends Entity<typeof TransactionCreatedAtSchema> {
-	constructor(id?: string) {
-		super({ id: id, attributes: [TransactionCreatedAtSchema] })
-	}
-}
-
-const TransactionCreatedAtSchema = new AttributeSchema({
+const TransactionCreatedAtSchema: AttributeSchema = {
 	name: "transaction/createdAt",
 	valueType: "string",
 	cardinality: "one",
-})
-
-export type GenericFact = Fact<Entity<any>, any>
-
-type BatchOp =
-	| { type: "del"; key: Array<string> }
-	| { type: "put"; key: Array<string>; value: any }
-
-const indexes = ["eavto", "aevto", "aveto", "vaeto"]
-
-export async function commit(facts: Array<GenericFact>) {
-	// https://docs.datomic.com/on-prem/indexes.html
-	// EAVT, get all attribute-values on an entity.
-	// AEVT, get all values of a given attribute.
-	// AVET, find entities with the same name, or enforce uniqueness.
-	// VAET, reverse index for finding relationships.
-
-	// Create a transaction with metadata.
-	const transaction = new Transaction()
-	const commitFacts = [
-		new Fact(transaction, "transaction/createdAt", new Date().toString()),
-		...facts,
-	]
-
-	// Write to each index.
-	const batchOps: Array<BatchOp> = []
-
-	for (const fact of commitFacts) {
-		const obj = {
-			e: fact.entity.id,
-			a: fact.attribute,
-			v: fact.value instanceof Entity ? fact.value.id : fact.value,
-			t: transaction.id,
-			o: fact.operation,
-		}
-
-		for (const index of indexes) {
-			batchOps.push({
-				type: "put",
-				key: [index, ...index.split("").map(key => obj[key])],
-				value: fact.id,
-			})
-		}
-	}
-
-	await db.batch(batchOps)
 }
 
 export class Var<T extends ValueType> {

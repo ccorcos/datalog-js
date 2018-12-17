@@ -2,6 +2,20 @@
 
 Goal: Peer to peer chat messaging using a datalog-like database.
 
+
+database refactor
+- no classes, thats just confusing.
+- tests along the way. simpler types.
+
+---
+
+- build database basics, indexes, queries
+- test database funtionality
+- device and use identity model
+- database sync
+
+---
+
 - use simple-peer and a signalhub to connect users
 - create a simple datalog database with the various indexes. no query language yet.
 - create crypto keys, save in local storage.
