@@ -28,6 +28,8 @@ export const systemAttributes: Array<Attribute> = [
 	},
 ]
 
+const SEP = "|"
+
 let n = 100
 const randomTx = () => (n++).toString()
 
@@ -93,7 +95,7 @@ export async function commit(args: {
 		for (const index of indexes) {
 			batchOps.push({
 				type: "put",
-				key: [index, ...index.split("").map(key => obj[key])],
+				key: [index, ...index.split("").map(key => obj[key])].join(SEP),
 				value: fact.id,
 			})
 		}
@@ -203,23 +205,26 @@ export async function query(args: {
 				keyPrefix.push(v)
 			}
 
-			const stream = range({ db, prefix: keyPrefix })
-
 			const results: Array<CommittedFact> = []
-			for await (const { key, value } of stream) {
-				// Get the values off the index.
-				const [e, a, v, t, o] = "eavto"
-					.split("")
-					.map(x => key[index.indexOf(x) + 1])
-				results.push({
-					id: value,
-					entity: e,
-					attribute: a,
-					value: v,
-					transaction: t,
-					remove: o,
-				})
-			}
+			await range({
+				db,
+				prefix: keyPrefix.join(SEP),
+				onData: ({ key, value }) => {
+					const keyItems = key.split(SEP)
+					// Get the values off the index.
+					const [e, a, v, t, o] = "eavto"
+						.split("")
+						.map(x => keyItems[index.indexOf(x) + 1])
+					results.push({
+						id: value,
+						entity: e,
+						attribute: a,
+						value: v,
+						transaction: t,
+						remove: JSON.parse(o),
+					})
+				},
+			})
 
 			const entityAttributeFacts = _.groupBy(
 				results,
@@ -316,15 +321,28 @@ export async function query(args: {
 	return find.map(unknown => bindings[unknown])
 }
 
-export async function* range(args: {
+export async function range(args: {
 	db: LevelUp
-	prefix: Array<any>
-}): AsyncIterableIterator<{ key: Array<any>; value: any }> {
-	const { db, prefix } = args
+	prefix: string
+	onData: (args: { key: string; value: string }) => void
+}) {
+	const { db, prefix, onData } = args
 	const gte = prefix
-	const lte = prefix.concat([void 0])
+	const lte = prefix + "\uffff"
+
 	const stream = db.createReadStream({ gte: gte, lte: lte })
-	return new StreamIterator(stream)
+
+	let resolve, reject
+	const promise = new Promise<void>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+
+	stream.on("error", reject)
+	stream.on("end", resolve)
+	stream.on("data", onData)
+
+	return promise
 }
 
 export function d(

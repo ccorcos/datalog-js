@@ -1,9 +1,7 @@
 # Datalog In JS
 
 
-
 database refactor
-- no classes, thats just confusing.
 - tests along the way. simpler types.
 
 - how can we verify the database?

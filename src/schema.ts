@@ -1,4 +1,4 @@
-import { Attribute } from "../src/types"
+import { Attribute } from "./types"
 
 const GroupNameSchema: Attribute = {
 	name: "group/name",

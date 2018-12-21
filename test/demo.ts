@@ -1,6 +1,6 @@
 import test from "ava"
 import "babel-polyfill"
-import { schema } from "./schema"
+import { schema } from "../src/schema"
 import { commit, query, d } from "../src/database"
 import { LevelUp } from "levelup"
 import * as level from "level"
@@ -11,19 +11,19 @@ test("set/get", async t => {
 	await commit({
 		db: db,
 		schema: schema,
-		facts: [d("chet", "person/name", "Chet")],
+		facts: [d("me", "person/name", "Chester")],
 	})
 
 	const result = await query({
 		db: db,
 		schema: schema,
 		find: ["who?"],
-		given: { "name?": ["Chet"] },
+		given: { "name?": ["Chester"] },
 		where: [["who?", "person/name", "name?"]],
 	})
 
 	console.log("result", result)
-	t.is(result[0][0], "Chet")
+	t.is(result[0][0], "me")
 })
 
 /*

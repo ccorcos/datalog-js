@@ -23,8 +23,8 @@ export interface CommittedFact extends Fact {
 }
 
 export type BatchOp =
-	| { type: "del"; key: Array<string> }
-	| { type: "put"; key: Array<string>; value: any }
+	| { type: "del"; key: string }
+	| { type: "put"; key: string; value: any }
 
 export type Statement = [
 	string, // Entity
