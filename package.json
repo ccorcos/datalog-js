@@ -20,6 +20,7 @@
 	"author": "",
 	"license": "MIT",
 	"dependencies": {
+		"babel-polyfill": "^6.26.0",
 		"charwise": "^3.0.1",
 		"cuid": "^2.1.4",
 		"level": "^4.0.0",

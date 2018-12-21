@@ -12,7 +12,7 @@ import {
 	Bindings,
 } from "./types"
 import { permuteBindings, isVar } from "./utils"
-import * as StreamIterator from "stream-to-async-iterator"
+import StreamIterator from "stream-to-async-iterator"
 
 const valueTypeOf: { [key in ValueType]: string } = {
 	number: "number",
@@ -327,6 +327,17 @@ export async function* range(args: {
 	return new StreamIterator(stream)
 }
 
-// function database(filePath: string, schema: Array<Attribute>) {
-// 	const db: LevelUp = level(filePath)
-// }
+export function d(
+	entity: string,
+	attribute: string,
+	value: Value,
+	remove?: boolean
+): Fact {
+	return {
+		id: randomId(),
+		entity,
+		attribute,
+		value,
+		remove,
+	}
+}
