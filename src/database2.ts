@@ -2,63 +2,33 @@ import * as randomId from "cuid"
 import * as level from "level"
 import { LevelUp } from "levelup"
 
-type Cardinality = "one" | "many"
-type ValueType = "number" | "string" | "reference"
+export type Cardinality = "one" | "many"
+export type ValueType = "number" | "string" | "reference"
+export type Value = string | number
 
-interface Attribute<
-	N extends string,
-	V extends ValueType,
-	C extends Cardinality
-> {
-	name: N
-	valueType: V
-	cardinality: C
+export interface Attribute {
+	name: string
+	valueType: ValueType
+	cardinality: Cardinality
 	noHistory?: boolean
 	unique?: boolean
 }
 
-function Attribute<
-	N extends string,
-	V extends ValueType,
-	C extends Cardinality
->(args: Attribute<N, V, C>) {
-	return args
-}
-
-type ValueTypeType<V extends ValueType> = V extends "number"
-	? number
-	: V extends "string"
-	? string
-	: V extends "reference"
-	? string
-	: undefined
-
-type Operation<C extends Cardinality> = C extends "one"
-	? "set"
-	: "add" | "remove"
-
-interface Fact<N extends string, V extends ValueType, C extends Cardinality> {
+export interface Fact {
 	id: string
 	entity: string
-	attribute: N
-	value: V
-	operation: Operation<C>
+	attribute: string
+	value: Value
+	remove?: boolean
 }
 
-function Fact<N extends string, V extends ValueType, C extends Cardinality>(
-	entity: string,
-	attribute: N,
-	value: V,
-	operation: Operation<C>
-): Fact<N, V, C> {
-	return {
-		id: randomId(),
-		entity: entity,
-		attribute: attribute,
-		value: value,
-		operation: operation,
-	}
-}
+export const systemAttributes: Array<Attribute> = [
+	{
+		name: "transaction/createdAt",
+		valueType: "string",
+		cardinality: "one",
+	},
+]
 
 type BatchOp =
 	| { type: "del"; key: Array<string> }
@@ -66,19 +36,41 @@ type BatchOp =
 
 const indexes = ["eavto", "aevto", "aveto", "vaeto"]
 
-export async function commit(facts: Array<Fact>) {
+export async function commit(
+	db: LevelUp,
+	schema: Array<Attribute>,
+	facts: Array<Fact>
+) {
 	// https://docs.datomic.com/on-prem/indexes.html
 	// EAVT, get all attribute-values on an entity.
 	// AEVT, get all values of a given attribute.
 	// AVET, find entities with the same name, or enforce uniqueness.
 	// VAET, reverse index for finding relationships.
 
+	// Add system attributes to schema.
+	const commitSchema = [...schema, ...systemAttributes]
+
 	// Create a transaction with metadata.
 	const transactionId = randomId()
-	const commitFacts = [
-		Fact(transactionId, "transaction/createdAt", new Date().toString()),
+	const commitFacts: Array<Fact> = [
+		{
+			id: randomId(),
+			entity: transactionId,
+			attribute: "transaction/createdAt",
+			value: new Date().toString(),
+		},
 		...facts,
 	]
+
+	// Validate facts
+	for (const fact of commitFacts) {
+		// validate against known schemas.
+		const attrSchema = commitSchema.find(attr => attr.name === fact.attribute)
+		if (!attrSchema) {
+			throw new Error("Could not find schema for `" + fact.attribute + "`.")
+		}
+		// TODO: validate valueType
+	}
 
 	// Write to each index.
 	const batchOps: Array<BatchOp> = []
@@ -89,7 +81,7 @@ export async function commit(facts: Array<Fact>) {
 			a: fact.attribute,
 			v: fact.value,
 			t: transactionId,
-			o: fact.operation,
+			o: Boolean(fact.remove),
 		}
 
 		for (const index of indexes) {
@@ -104,64 +96,13 @@ export async function commit(facts: Array<Fact>) {
 	await db.batch(batchOps)
 }
 
-class Database {
-	constructor(name: string) {}
-}
+type Statement = [string, string, Value]
+type Binding = [string, Array<Value>]
 
-function createDb(path: string) {
-	const db: LevelUp = level("./mydb")
-	return db
-}
-
-export function range(
-	db: LevelUp,
-	prefix: Array<any>,
-	onData: (data: any) => void
-): Promise<void> {
-	const gte = prefix
-	const lte = prefix.concat([void 0])
-
-	const stream = db.createReadStream({ gte: gte, lte: lte })
-
-	let resolve, reject
-	const promise = new Promise<void>((res, rej) => {
-		resolve = res
-		reject = rej
-	})
-
-	stream.on("error", reject)
-	stream.on("end", resolve)
-	stream.on("data", onData)
-
-	return promise
-}
-
-const TransactionCreatedAtSchema: AttributeSchema = {
-	name: "transaction/createdAt",
-	valueType: "string",
-	cardinality: "one",
-}
-
-export class Var<T extends ValueType> {
-	public value: ValueTypeType<T> | undefined
-	constructor(public valueType: T) {}
-}
-
-type Binding<T extends ValueType> = [Var<T>, ValueTypeType<T>]
-
-type Statement<E extends Entity<any>, A extends keyof E["attributes"]> =
-	// Look up a value given an entity
-	| [E, A, Var<E["attributes"]["valueType"]>]
-	// Lookup an entity given a value
-	| [Var<Constructor<E>>, A, E["attributes"]["valueType"]]
-	// Look up either side.
-	| [Var<Constructor<E>>, A, Var<E["attributes"]["valueType"]>]
-
-// TODO: better return type.
 export async function query(opts: {
-	find: Array<Var<any>>
-	given: Array<Binding<any>>
-	where: Array<Statement<any, any>>
+	find: Array<string>
+	given: Array<Binding>
+	where: Array<Statement>
 }) {
 	// Datomic appears to run clauses in order.
 	// https://docs.datomic.com/on-prem/best-practices.html#join-along
@@ -169,10 +110,12 @@ export async function query(opts: {
 	//
 	// Lets try doing it in order first.
 
-	const bindings = new Map<Var<any>, ValueTypeType<any>>()
-	for (const [a, b] of opts.given) {
-		bindings.set(a, b)
+	const bindings: { [key: string]: Array<Value> } = {}
+	for (const [key, value] of opts.given) {
+		bindings[key] = value
 	}
+
+	// TODO: permute through all bindings first.
 
 	for (const statement of opts.where) {
 		// Resolve the bindings.
@@ -258,4 +201,42 @@ export async function query(opts: {
 	}
 
 	return opts.find.map(item => bindings.get(item))
+}
+
+export function range(
+	db: LevelUp,
+	prefix: Array<any>,
+	onData: (data: any) => void
+): Promise<void> {
+	const gte = prefix
+	const lte = prefix.concat([void 0])
+
+	const stream = db.createReadStream({ gte: gte, lte: lte })
+
+	let resolve, reject
+	const promise = new Promise<void>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+
+	stream.on("error", reject)
+	stream.on("end", resolve)
+	stream.on("data", onData)
+
+	return promise
+}
+
+function database(filePath: string, schema: Array<Attribute>) {
+	const db: LevelUp = level(filePath)
+}
+
+function permute(bindings: {
+	[key: string]: Array<Value>
+}): Array<{ [key: string]: Value }> {
+	const result: Array<{ [key: string]: Value }> = []
+
+	for (const key in bindings) {
+		for (const value of bindings[key]) {
+		}
+	}
 }
